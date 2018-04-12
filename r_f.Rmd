@@ -1,0 +1,86 @@
+---
+title: "replicating baskett & salomon 2010"
+output: github_document
+---
+
+Can replicate the results of Baskett & Salomon (2010)?
+
+```{r}
+library(deSolve)
+library(tidyverse)
+```
+
+Try test function: logistic growth
+
+```{r}
+model <- function(time, y, parms) {
+  with(as.list(c(y, parms)), {
+    dN <- r * N * (1-N / K)
+    list(dN)
+  })
+}
+
+y <- c(N = 0.1)
+parms <- c(r = 0.1, K = 10)
+times <- seq(0, 100, 1)
+
+out <- ode(y, times, model, parms)
+plot(out)
+```
+
+Looks good. Now let's specify three model equations (eqns 1-3), one for CCA, one for kelp, one for urchins.
+
+```{r}
+model <- function (time, y, parms) {
+  with(as.list(c(y, parms)), {
+    dP <- P * (r_c / K_c) * (K_c - P - (a_ca * A))
+    dA <- A * (((r_a / K_a) * (K_a - A - (a_ac * P))) - (d_h * H))
+    dH <- H * ((b_h * d_h * A * (1 - f_h + (f_h * (P / K_c)))) - u_h)
+    list(c(dP, dA, dH))
+  })
+}
+```
+
+Specify starting values from Fig. 4
+
+```{r}
+y <- c(P = 10, A = 1, H = 60)
+parms <- c(r_c = 50, r_a = 100, 
+           K_c = 60, K_a = 60, 
+           a_ca = 1.5, a_ac = 0.5, 
+           d_h = 5, b_h = 0.01, f_h = 0.85, u_h = 0.02)
+times <- seq(0, 50, 1)
+```
+
+Run for 50 time steps
+
+```{r}
+out <- ode(y, times, model, parms)
+```
+
+Plot
+
+```{r, echo = FALSE}
+plot(out)
+```
+
+It's working! But doesn't give us exactly what we would expect... Try to replicate Fig. 4...
+
+```{r, warning=FALSE, message=FALSE}
+data.frame(u_h_vec =  c(NA, 0.02, seq(0.1, 0.7, by = 0.1)),
+           stringsAsFactors = FALSE) %>%
+  mutate(P = rep(NA), A = rep(NA), H = rep(NA)) -> df_loop
+
+df_loop[1,] <- c(NA, 10, 1, 60)
+
+for (i in 2: nrow(df_loop)) {
+  y <- as.numeric(df_loop[i-1, 2:4])
+  y <- ifelse(y <= 0, .001, y)
+  names(y) <- c("P", "A", "H")
+  out <- ode(y, times, model, parms)
+  df_loop[i, 2:4] <- out[nrow(out), 2:4]
+}
+```
+
+Also doesn't work! How disappointing!
+
